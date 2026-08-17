@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mirage</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ TOP BAR ══ -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <svg class="brand-logo" width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="15" fill="url(#grad)" />
+      <path d="M8 22 Q12 10 16 16 Q20 22 24 10" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#7c3aed"/>
+          <stop offset="100%" stop-color="#4f46e5"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <span class="brand-name">Mirage</span>
+    <span class="brand-badge">v1.0</span>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn-icon" id="btn-export" title="Export configuration">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </button>
+    <button class="btn-icon" id="btn-import" title="Import configuration">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-9.707a1 1 0 000 1.414L9 11.414V3a1 1 0 112 0v8.414l2.707-2.707a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" transform="rotate(180 10 10)"/><path fill-rule="evenodd" d="M17 3a1 1 0 00-1 1v12a1 1 0 11-2 0V4a1 1 0 00-1-1H4a1 1 0 000 2h8v11a3 3 0 106 0V4a1 1 0 00-1-1zM7 7a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+    </button>
+    <label class="global-toggle" title="Enable / disable all rules">
+      <input type="checkbox" id="global-enabled" />
+      <span class="toggle-track">
+        <span class="toggle-thumb"></span>
+      </span>
+    </label>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════ PROFILE BAR ══ -->
+<div class="profile-bar">
+  <div class="profile-select-wrap">
+    <div class="profile-dot" id="profile-dot"></div>
+    <select id="profile-select" class="profile-select"></select>
+  </div>
+  <div class="profile-actions">
+    <button class="btn-icon" id="btn-add-profile" title="New profile">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+    </button>
+    <button class="btn-icon" id="btn-rename-profile" title="Rename profile">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+    </button>
+    <button class="btn-icon btn-icon-danger" id="btn-delete-profile" title="Delete profile">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+    </button>
+    <label class="profile-toggle-wrap" title="Enable this profile">
+      <input type="checkbox" id="profile-enabled" />
+      <span class="toggle-track sm">
+        <span class="toggle-thumb"></span>
+      </span>
+    </label>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════ TABS ══ -->
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="headers">
+    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" clip-rule="evenodd"/></svg>
+    Headers
+    <span class="tab-count" id="header-count"></span>
+  </button>
+  <button class="tab-btn" data-tab="mocks">
+    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/></svg>
+    Mock Responses
+    <span class="tab-count" id="mock-count"></span>
+  </button>
+</nav>
+
+<!-- ═════════════════════════════════════════════ CONTENT ══ -->
+<main class="content">
+
+  <!-- ── HEADERS TAB ── -->
+  <section id="tab-headers" class="tab-pane active">
+    <div class="rules-list" id="header-rules-list">
+      <!-- Header rule cards injected here -->
+    </div>
+    <div class="empty-state" id="header-empty">
+      <svg viewBox="0 0 64 64" fill="none"><rect x="8" y="14" width="48" height="8" rx="4" fill="#30363d"/><rect x="8" y="28" width="36" height="8" rx="4" fill="#30363d"/><rect x="8" y="42" width="24" height="8" rx="4" fill="#30363d"/><circle cx="52" cy="46" r="10" fill="#7c3aed" opacity=".2"/><path d="M49 46h6M52 43v6" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg>
+      <p>No header rules yet</p>
+      <span>Add rules to modify request &amp; response headers</span>
+    </div>
+    <button class="btn-add-rule" id="btn-add-header-rule">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+      Add Header Rule
+    </button>
+  </section>
+
+  <!-- ── MOCKS TAB ── -->
+  <section id="tab-mocks" class="tab-pane">
+    <div class="rules-list" id="mock-rules-list">
+      <!-- Mock rule cards injected here -->
+    </div>
+    <div class="empty-state" id="mock-empty">
+      <svg viewBox="0 0 64 64" fill="none"><rect x="10" y="10" width="44" height="44" rx="6" fill="#30363d"/><path d="M22 32h20M22 24h12M22 40h16" stroke="#484f58" stroke-width="2.5" stroke-linecap="round"/><circle cx="48" cy="48" r="10" fill="#7c3aed" opacity=".2"/><path d="M45 48h6M48 45v6" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg>
+      <p>No mock responses yet</p>
+      <span>Intercept requests and return custom responses</span>
+    </div>
+    <button class="btn-add-rule" id="btn-add-mock-rule">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>
+      Add Mock Rule
+    </button>
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════════════════════ TOAST ══ -->
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<!-- ══════════════════════════════════════════════ MODALS ══ -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div id="modal" class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title"></h2>
+      <button class="btn-icon" id="modal-close">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- hidden file input for import -->
+<input type="file" id="import-file-input" accept=".json" style="display:none" />
+
+<script src="popup.js" type="module"></script>
+</body>
+</html>
