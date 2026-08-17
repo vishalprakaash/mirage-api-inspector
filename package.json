@@ -1,0 +1,11 @@
+{
+  "name": "mirage-api-interceptor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Privacy-first browser extension for API header modification and response mocking.",
+  "type": "module",
+  "scripts": {
+    "test": "node test/match.test.js && node test/dnr.test.js && node test/intercept.test.js",
+    "icons": "node generate-icons.js"
+  }
+}

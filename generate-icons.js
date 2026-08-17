@@ -4,9 +4,12 @@
  * Outputs: icons/icon16.png, icons/icon48.png, icons/icon128.png
  */
 
-const zlib = require('zlib');
-const fs = require('fs');
-const path = require('path');
+import zlib from 'node:zlib';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── CRC32 ────────────────────────────────────────────────────────────────────
 

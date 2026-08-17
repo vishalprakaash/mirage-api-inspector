@@ -28,7 +28,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["content-main.js"],
+      "js": ["lib/mock-match.js", "content-main.js"],
       "run_at": "document_start",
       "world": "MAIN",
       "all_frames": true

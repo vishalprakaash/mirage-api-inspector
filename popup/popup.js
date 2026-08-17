@@ -59,6 +59,23 @@ function methodColor(m) {
   return map[m] || 'method-ANY';
 }
 
+const ICON_X = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
+const ICON_PLUS = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>';
+
+/** Url patterns for a rule; tolerates the pre-v2 single-string shape. */
+function rulePatterns(rule) {
+  if (Array.isArray(rule.urlFilters)) return rule.urlFilters;
+  return rule.urlFilter ? [rule.urlFilter] : [];
+}
+
+/** Chip text summarising a rule's url filters for the collapsed card header. */
+function urlChipHtml(rule) {
+  const pats = rulePatterns(rule).filter((p) => p && p.trim());
+  if (pats.length === 0) return '<span class="rule-url-chip dim">all URLs</span>';
+  const extra = pats.length > 1 ? ` +${pats.length - 1}` : '';
+  return `<span class="rule-url-chip" title="${escHtml(pats.join('\n'))}">${escHtml(pats[0])}${extra}</span>`;
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let state = null; // full state from background
@@ -123,6 +140,98 @@ function renderProfileBar() {
   enabledCb.checked = profile?.enabled ?? false;
 }
 
+// ─── URL list editor (shared by header + mock cards) ─────────────────────────
+
+/**
+ * Editable list of url patterns bound to `rule.urlFilters`.
+ * `save` persists the rule; `onChange` refreshes the card's summary chip.
+ */
+function buildUrlListEditor(rule, save, onChange) {
+  if (!Array.isArray(rule.urlFilters)) {
+    rule.urlFilters = rule.urlFilter ? [rule.urlFilter] : [];
+    delete rule.urlFilter;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'url-list-wrap';
+  wrap.innerHTML = `
+    <div class="section-label url-section-label">
+      URL Filters
+      <span class="url-count-hint"></span>
+    </div>
+    <div class="url-list"></div>
+    <div class="url-empty-hint">No filters — this rule applies to <strong>all URLs</strong></div>
+    <button class="add-row-btn add-url-btn">${ICON_PLUS} Add URL</button>
+  `;
+
+  const list = wrap.querySelector('.url-list');
+  const emptyHint = wrap.querySelector('.url-empty-hint');
+  const countHint = wrap.querySelector('.url-count-hint');
+
+  function commit() {
+    const n = rule.urlFilters.filter((p) => p && p.trim()).length;
+    emptyHint.style.display = n === 0 ? 'block' : 'none';
+    countHint.textContent = n > 0 ? `${n} URL${n !== 1 ? 's' : ''} — matches any` : '';
+    save({ urlFilters: rule.urlFilters.slice() });
+    if (onChange) onChange();
+  }
+
+  const commitDebounced = debounce(commit, 500);
+
+  function makeRow(value) {
+    const row = document.createElement('div');
+    row.className = 'url-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'url-filter-input';
+    input.placeholder = 'localhost*   •   https://api.example.com/*';
+    input.value = value || '';
+
+    const del = document.createElement('button');
+    del.className = 'btn-icon btn-icon-sm btn-icon-danger';
+    del.title = 'Remove URL';
+    del.innerHTML = ICON_X;
+
+    // Index by DOM position so rows stay bound after add/remove.
+    const indexOf = () => Array.prototype.indexOf.call(list.children, row);
+
+    input.addEventListener('input', () => {
+      const i = indexOf();
+      if (i >= 0) {
+        rule.urlFilters[i] = input.value.trim();
+        commitDebounced();
+      }
+    });
+
+    del.addEventListener('click', () => {
+      const i = indexOf();
+      if (i >= 0) rule.urlFilters.splice(i, 1);
+      row.remove();
+      commit();
+    });
+
+    row.append(input, del);
+    return row;
+  }
+
+  for (const p of rule.urlFilters) list.appendChild(makeRow(p));
+
+  wrap.querySelector('.add-url-btn').addEventListener('click', () => {
+    rule.urlFilters.push('');
+    const row = makeRow('');
+    list.appendChild(row);
+    emptyHint.style.display = 'none';
+    row.querySelector('input').focus();
+  });
+
+  const n = rule.urlFilters.filter((p) => p && p.trim()).length;
+  emptyHint.style.display = n === 0 ? 'block' : 'none';
+  countHint.textContent = n > 0 ? `${n} URL${n !== 1 ? 's' : ''} — matches any` : '';
+
+  return wrap;
+}
+
 // ─── HEADER RULES ─────────────────────────────────────────────────────────────
 
 function renderHeaderRules() {
@@ -149,7 +258,7 @@ function buildHeaderRuleCard(rule, expanded = false) {
   card.dataset.id = rule.id;
 
   const headerCount = rule.headers?.filter((h) => h.enabled).length ?? 0;
-  const urlChip = rule.urlFilter ? `<span class="rule-url-chip" title="${escHtml(rule.urlFilter)}">${escHtml(rule.urlFilter)}</span>` : '';
+  const urlChip = urlChipHtml(rule);
 
   card.innerHTML = `
     <div class="rule-card-header">
@@ -172,10 +281,7 @@ function buildHeaderRuleCard(rule, expanded = false) {
       </div>
     </div>
     <div class="rule-card-body">
-      <div class="url-filter-row">
-        <span class="field-label">URL Filter</span>
-        <input class="url-filter-input rule-url-input" placeholder="All URLs  •  localhost*  •  https://api.example.com/*" value="${escHtml(rule.urlFilter || '')}" />
-      </div>
+      <div class="url-editor-slot"></div>
       <div class="section-label" style="margin-top:4px">Headers</div>
       <div class="headers-table header-items"></div>
       <button class="add-row-btn add-header-btn">
@@ -184,6 +290,16 @@ function buildHeaderRuleCard(rule, expanded = false) {
       </button>
     </div>
   `;
+
+  // URL filters
+  const refreshChip = () => {
+    const chipHost = card.querySelector('.rule-summary');
+    const oldChip = chipHost.querySelector('.rule-url-chip');
+    if (oldChip) oldChip.outerHTML = urlChipHtml(rule);
+  };
+  card.querySelector('.url-editor-slot').appendChild(
+    buildUrlListEditor(rule, (changes) => saveHeaderRule(rule, changes), refreshChip)
+  );
 
   // Populate header items
   const headerItems = card.querySelector('.header-items');
@@ -215,10 +331,6 @@ function buildHeaderRuleCard(rule, expanded = false) {
     e.stopPropagation();
     deleteHeaderRule(rule.id);
   });
-
-  // URL filter
-  const urlInput = card.querySelector('.rule-url-input');
-  urlInput.addEventListener('input', debounce(() => saveHeaderRule(rule, { urlFilter: urlInput.value.trim() }), 600));
 
   // Add header row
   card.querySelector('.add-header-btn').addEventListener('click', () => {
@@ -321,7 +433,7 @@ function addHeaderRule() {
     profileId: profile.id,
     enabled: true,
     name: 'New Rule',
-    urlFilter: '',
+    urlFilters: [],
     headers: [{ id: uid(), type: 'request', operation: 'set', name: '', value: '', enabled: true }]
   };
 
@@ -363,6 +475,8 @@ function buildMockRuleCard(rule, expanded = false) {
 
   const statusClass = rule.statusCode < 300 ? 'status-ok' : rule.statusCode < 400 ? 'status-redir' : 'status-err';
   const method = rule.method || 'ANY';
+  const bm = rule.bodyMatch || { mode: 'any', value: '' };
+  const payloadActive = bm.mode && bm.mode !== 'any' && String(bm.value || '').trim();
 
   card.innerHTML = `
     <div class="rule-card-header">
@@ -373,7 +487,8 @@ function buildMockRuleCard(rule, expanded = false) {
         <input class="rule-name-input" value="${escHtml(rule.name || 'Untitled Mock')}" placeholder="Mock name" />
         <span class="method-badge ${methodColor(method)}">${escHtml(method)}</span>
         <span class="${statusClass}" style="font-size:11px;font-weight:700">${rule.statusCode || 200}</span>
-        ${rule.urlFilter ? `<span class="rule-url-chip" title="${escHtml(rule.urlFilter)}">${escHtml(rule.urlFilter)}</span>` : ''}
+        ${payloadActive ? `<span class="badge badge-payload" title="Also matches on request payload">payload</span>` : ''}
+        ${urlChipHtml(rule)}
       </div>
       <div class="rule-card-actions">
         <label style="display:flex;align-items:center;cursor:pointer" title="Enable">
@@ -386,10 +501,7 @@ function buildMockRuleCard(rule, expanded = false) {
       </div>
     </div>
     <div class="rule-card-body">
-      <div class="url-filter-row">
-        <span class="field-label">URL Filter</span>
-        <input class="url-filter-input mock-url-input" placeholder="All URLs  •  localhost*  •  https://api.example.com/users" value="${escHtml(rule.urlFilter || '')}" />
-      </div>
+      <div class="url-editor-slot"></div>
       <div class="form-grid">
         <div class="form-field">
           <label class="field-label">Method</label>
@@ -412,6 +524,16 @@ function buildMockRuleCard(rule, expanded = false) {
           <input type="number" class="mock-delay" min="0" max="30000" value="${rule.delay || 0}" placeholder="0" />
         </div>
       </div>
+      <div class="body-match-wrap">
+        <div class="section-label" style="margin-bottom:6px">Request Payload Match</div>
+        <select class="mock-body-mode">
+          <option value="any" ${bm.mode === 'any' || !bm.mode ? 'selected' : ''}>Any payload — match on URL only</option>
+          <option value="exact" ${bm.mode === 'exact' ? 'selected' : ''}>Exact match</option>
+          <option value="includes" ${bm.mode === 'includes' ? 'selected' : ''}>Contains</option>
+        </select>
+        <textarea class="mock-body-match-value body-match-area" placeholder='{"userId": 42}'>${escHtml(bm.value || '')}</textarea>
+        <div class="body-match-hint"></div>
+      </div>
       <div class="response-body-wrap">
         <div class="response-body-toolbar">
           <label class="field-label">Response Body</label>
@@ -429,6 +551,58 @@ function buildMockRuleCard(rule, expanded = false) {
       </div>
     </div>
   `;
+
+  // URL filters
+  const refreshChip = () => {
+    const chipHost = card.querySelector('.rule-summary');
+    const oldChip = chipHost.querySelector('.rule-url-chip');
+    if (oldChip) oldChip.outerHTML = urlChipHtml(rule);
+  };
+  card.querySelector('.url-editor-slot').appendChild(
+    buildUrlListEditor(rule, (changes) => saveMockRule(rule, changes), refreshChip)
+  );
+
+  // Payload matcher
+  const modeSel = card.querySelector('.mock-body-mode');
+  const matchArea = card.querySelector('.mock-body-match-value');
+  const matchHint = card.querySelector('.body-match-hint');
+
+  const HINTS = {
+    exact: 'Body must equal this exactly. JSON is compared structurally, so key order and formatting are ignored.',
+    includes: 'Body must contain this text. Whitespace is ignored, so <code>"id": 5</code> also matches <code>{"id":5}</code>.'
+  };
+
+  function syncPayloadUI() {
+    const mode = modeSel.value;
+    const on = mode !== 'any';
+    matchArea.style.display = on ? 'block' : 'none';
+    matchHint.style.display = on ? 'block' : 'none';
+    matchHint.innerHTML = HINTS[mode] || '';
+    updatePayloadBadge();
+  }
+
+  function updatePayloadBadge() {
+    const active = modeSel.value !== 'any' && matchArea.value.trim();
+    const summary = card.querySelector('.rule-summary');
+    const existing = summary.querySelector('.badge-payload');
+    if (active && !existing) {
+      const badge = document.createElement('span');
+      badge.className = 'badge badge-payload';
+      badge.title = 'Also matches on request payload';
+      badge.textContent = 'payload';
+      summary.insertBefore(badge, summary.querySelector('.rule-url-chip'));
+    } else if (!active && existing) {
+      existing.remove();
+    }
+  }
+
+  function saveBodyMatch() {
+    saveMockRule(rule, { bodyMatch: { mode: modeSel.value, value: matchArea.value } });
+  }
+
+  modeSel.addEventListener('change', () => { syncPayloadUI(); saveBodyMatch(); });
+  matchArea.addEventListener('input', debounce(() => { updatePayloadBadge(); saveBodyMatch(); }, 600));
+  syncPayloadUI();
 
   // Populate response headers
   const resHeaderList = card.querySelector('.mock-res-headers');
@@ -457,13 +631,6 @@ function buildMockRuleCard(rule, expanded = false) {
     e.stopPropagation();
     deleteMockRule(rule.id);
   });
-
-  card.querySelector('.mock-url-input').addEventListener('input', debounce((e) => {
-    saveMockRule(rule, { urlFilter: e.target.value.trim() });
-    // Update chip in header
-    const chip = card.querySelector('.rule-url-chip');
-    if (chip) chip.textContent = chip.title = e.target.value.trim();
-  }, 600));
 
   card.querySelector('.mock-method').addEventListener('change', (e) => {
     saveMockRule(rule, { method: e.target.value });
@@ -575,12 +742,13 @@ function addMockRule() {
     profileId: profile.id,
     enabled: true,
     name: 'New Mock',
-    urlFilter: '',
+    urlFilters: [],
     method: 'ANY',
     statusCode: 200,
     contentType: 'application/json',
     responseBody: '{\n  "message": "Mocked by Mirage"\n}',
     delay: 0,
+    bodyMatch: { mode: 'any', value: '' },
     responseHeaders: []
   };
 

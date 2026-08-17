@@ -8,8 +8,8 @@
  *  4. Draw badge/icon to indicate active state
  */
 
-import { getState, setState, makeProfile } from './lib/storage.js';
-import { patternToDeclarativeFilter } from './lib/url-matcher.js';
+import { getState, setState, makeProfile, migrate } from './lib/storage.js';
+import { buildDeclarativeRules } from './lib/dnr-rules.js';
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ async function handleMessage(msg, sender) {
       return { ok: true, rules: await getActiveMockRules() };
 
     case 'IMPORT_DATA':
-      await setState((s) => Object.assign(s, msg.data));
+      await setState((s) => Object.assign(s, migrate(msg.data)));
       await syncAllRules();
       await pushMockRulesToTabs();
       updateBadge();
@@ -171,72 +171,6 @@ async function syncAllRules() {
       }
     }
   }
-}
-
-let _ruleIdCounter = 1;
-
-function buildDeclarativeRules(headerRules, profileId) {
-  const rules = [];
-  _ruleIdCounter = 1;
-
-  for (const rule of headerRules) {
-    if (rule.profileId !== profileId || !rule.enabled) continue;
-
-    const requestHeaders = [];
-    const responseHeaders = [];
-
-    for (const h of rule.headers) {
-      if (!h.enabled || !h.name) continue;
-
-      const entry = buildHeaderOperation(h);
-      if (!entry) continue;
-
-      if (h.type === 'request') requestHeaders.push(entry);
-      else responseHeaders.push(entry);
-    }
-
-    if (requestHeaders.length === 0 && responseHeaders.length === 0) continue;
-
-    const condition = buildCondition(rule.urlFilter);
-
-    if (requestHeaders.length > 0) {
-      rules.push({
-        id: _ruleIdCounter++,
-        priority: 1,
-        action: { type: 'modifyHeaders', requestHeaders },
-        condition
-      });
-    }
-
-    if (responseHeaders.length > 0) {
-      rules.push({
-        id: _ruleIdCounter++,
-        priority: 1,
-        action: { type: 'modifyHeaders', responseHeaders },
-        condition
-      });
-    }
-  }
-
-  return rules;
-}
-
-function buildHeaderOperation(h) {
-  const op = h.operation || 'set';
-  if (op === 'set') return { header: h.name, operation: 'set', value: h.value };
-  if (op === 'append') return { header: h.name, operation: 'append', value: h.value };
-  if (op === 'remove') return { header: h.name, operation: 'remove' };
-  return null;
-}
-
-function buildCondition(urlFilter) {
-  // Note: fetch() requests are classified as 'xmlhttprequest' in declarativeNetRequest
-  const base = { resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'websocket', 'other'] };
-
-  if (!urlFilter || urlFilter === '*' || urlFilter === '') return base;
-
-  const filterOpts = patternToDeclarativeFilter(urlFilter);
-  return { ...base, ...filterOpts };
 }
 
 // ─── Mock rule broadcasting ───────────────────────────────────────────────────

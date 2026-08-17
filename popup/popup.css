@@ -378,19 +378,104 @@ input[type="checkbox"]:checked + .toggle-track.sm .toggle-thumb {
 .url-filter-input:focus { border-color: var(--border-focus); }
 .url-filter-input::placeholder { color: var(--text-muted); font-family: inherit; }
 
+/* ─── URL list editor ────────────────────────────────────────────────────── */
+
+.url-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.url-section-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.url-count-hint {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.url-list { display: flex; flex-direction: column; gap: 5px; }
+
+.url-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  align-items: center;
+  animation: slideIn 150ms ease;
+}
+
+.url-empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 5px 8px;
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.url-empty-hint strong { color: var(--text-secondary); font-weight: 600; }
+
+/* ─── Payload matcher ────────────────────────────────────────────────────── */
+
+.body-match-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+.body-match-area {
+  min-height: 56px;
+  max-height: 130px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.body-match-hint {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.body-match-hint code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 0 3px;
+  color: var(--text-secondary);
+}
+
+.badge-payload {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--warning);
+}
+
 /* ─── Header rows ────────────────────────────────────────────────────────── */
 
 .headers-table { display: flex; flex-direction: column; gap: 6px; }
 
 .header-row {
   display: grid;
-  grid-template-columns: 80px 1fr 1fr auto auto;
+  grid-template-columns: 96px 1fr 1fr auto auto;
   gap: 5px;
   align-items: center;
   animation: slideIn 150ms ease;
 }
 
-.header-row .type-select { font-size: 11px; }
+/* Narrower padding than the shared select rule, so the label is not clipped. */
+.header-row .type-select {
+  font-size: 11px;
+  padding-left: 6px;
+  padding-right: 18px;
+  background-position: right 5px center;
+}
 
 .row-label {
   display: flex;
@@ -761,7 +846,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+  flex-shrink: 1;
+  min-width: 0;
 }
+
+.rule-url-chip.dim { color: var(--text-muted); font-style: italic; font-family: inherit; }
 
 /* ─── Disabled state for individual header rows ─────────────────────────── */
 .header-row.row-disabled { opacity: 0.45; }
