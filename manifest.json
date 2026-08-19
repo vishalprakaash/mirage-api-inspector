@@ -7,14 +7,10 @@
   "permissions": [
     "storage",
     "declarativeNetRequest",
-    "declarativeNetRequestFeedback",
-    "declarativeNetRequestWithHostAccess",
-    "tabs",
-    "scripting",
-    "webNavigation",
-    "activeTab"
+    "webNavigation"
   ],
   "host_permissions": ["<all_urls>"],
+  "minimum_chrome_version": "111",
   "background": {
     "service_worker": "background.js",
     "type": "module"
