@@ -121,7 +121,8 @@ console.log('Conditions');
 
 check('no filter → resourceTypes only', Object.keys(buildCondition('')).sort(), ['resourceTypes']);
 check('wildcard → resourceTypes only', Object.keys(buildCondition('*')).sort(), ['resourceTypes']);
-check('localhost* uses a regex filter', 'regexFilter' in buildCondition('localhost*'), true);
+check('localhost* condition carries requestDomains',
+  buildCondition('localhost*').requestDomains, ['localhost']);
 check('no invalid "fetch" resource type',
   buildCondition('').resourceTypes.includes('fetch'), false);
 check('covers xmlhttprequest',
@@ -139,35 +140,35 @@ check('wildcard → no filter', patternToDeclarativeFilter('*'), {});
 check('whitespace → no filter', patternToDeclarativeFilter('   '), {});
 check('undefined → no filter', patternToDeclarativeFilter(undefined), {});
 
-check('plain host uses urlFilter',
-  patternToDeclarativeFilter('https://api.acme.dev/*'),
-  { urlFilter: 'https://api.acme.dev/*', isUrlFilterCaseSensitive: false });
+// Host-shaped patterns use requestDomains: port- and path-agnostic by
+// definition, and no regex Chrome could reject.
+check('localhost* uses requestDomains',
+  patternToDeclarativeFilter('localhost*'), { requestDomains: ['localhost'] });
+check('bare localhost uses requestDomains',
+  patternToDeclarativeFilter('localhost'), { requestDomains: ['localhost'] });
+check('IP host uses requestDomains',
+  patternToDeclarativeFilter('127.0.0.1*'), { requestDomains: ['127.0.0.1'] });
+check('plain hostname uses requestDomains',
+  patternToDeclarativeFilter('api.acme.dev'), { requestDomains: ['api.acme.dev'] });
+check('host is lowercased',
+  patternToDeclarativeFilter('LocalHost*'), { requestDomains: ['localhost'] });
 
-check('localhost shorthand uses regexFilter',
-  patternToDeclarativeFilter('localhost*').regexFilter,
-  '^https?://localhost(:\\d+)?([/?#].*)?$');
+// Anything with a scheme, port, or path goes through urlFilter.
+check('full URL uses urlFilter',
+  patternToDeclarativeFilter('https://api.acme.dev/*'), { urlFilter: 'https://api.acme.dev/*' });
+check('explicit port uses urlFilter',
+  patternToDeclarativeFilter('https://acme.dev:8443/api/*'), { urlFilter: 'https://acme.dev:8443/api/*' });
+check('path pattern uses urlFilter',
+  patternToDeclarativeFilter('*/users/*'), { urlFilter: '*/users/*' });
 
-check('explicit port uses regexFilter',
-  'regexFilter' in patternToDeclarativeFilter('https://acme.dev:8443/api/*'), true);
+// regexFilter is avoided entirely: one rule Chrome rejects kills the batch.
+check('never emits regexFilter',
+  ['localhost*', '127.0.0.1*', 'https://a.dev/*', '*/users/*', 'a.dev:8443/*']
+    .some((p) => 'regexFilter' in patternToDeclarativeFilter(p)), false);
 
-check('regex metacharacters are escaped',
-  patternToDeclarativeFilter('http://localhost:3000/a.b').regexFilter,
-  '^http://localhost:3000/a\\.b');
-
-check('star becomes .* in regex form',
-  patternToDeclarativeFilter('http://localhost:3000/*').regexFilter,
-  '^http://localhost:3000/.*');
-
-// The generated localhost regex must behave like the mock-side matcher.
-{
-  const re = new RegExp(patternToDeclarativeFilter('localhost*').regexFilter, 'i');
-  check('DNR localhost regex: bare host', re.test('http://localhost'), true);
-  check('DNR localhost regex: with port', re.test('http://localhost:3000'), true);
-  check('DNR localhost regex: port + path', re.test('https://localhost:8443/a/b'), true);
-  check('DNR localhost regex: query without path', re.test('http://localhost:3000?q=1'), true);
-  check('DNR localhost regex: rejects lookalike host', re.test('https://localhost.evil.com/'), false);
-  check('DNR localhost regex: rejects substring host', re.test('https://notlocalhost.dev/'), false);
-}
+// isUrlFilterCaseSensitive defaults to false; emitting it adds nothing.
+check('no redundant case-sensitivity key',
+  'isUrlFilterCaseSensitive' in patternToDeclarativeFilter('https://a.dev/*'), false);
 
 console.log('Legacy shape');
 

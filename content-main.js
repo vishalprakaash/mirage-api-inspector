@@ -120,7 +120,9 @@
     // Never let a matcher failure break the page's own networking.
     try {
       const isRequest = typeof Request !== 'undefined' && resource instanceof Request;
-      url = isRequest ? resource.url : String(resource);
+      // Request.url is already absolute; a bare string may be relative
+      // ('/api/users'), and url patterns are always written against full URLs.
+      url = isRequest ? resource.url : M.resolveUrl(resource, document.baseURI);
       method = String((isRequest ? resource.method : init && init.method) || 'GET').toUpperCase();
       rule = await resolveRuleAsync(url, method, resource, init);
     } catch (err) {
@@ -142,12 +144,7 @@
 
   XMLHttpRequest.prototype.open = function open(method, url) {
     this.__mirageMethod = String(method || 'GET').toUpperCase();
-    try {
-      // Resolve against the document so relative URLs match patterns correctly.
-      this.__mirageUrl = new URL(String(url), document.baseURI).href;
-    } catch {
-      this.__mirageUrl = String(url);
-    }
+    this.__mirageUrl = M.resolveUrl(url, document.baseURI);
     return _originalOpen.apply(this, arguments);
   };
 

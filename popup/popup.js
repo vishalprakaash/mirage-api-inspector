@@ -62,6 +62,19 @@ function methodColor(m) {
 const ICON_X = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>';
 const ICON_PLUS = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/></svg>';
 
+/**
+ * Expands or collapses a rule card, scrolling a newly opened one into view so
+ * its lower fields (payload matcher, response body) are not left below the fold.
+ */
+function toggleCard(card) {
+  const opening = !card.classList.contains('expanded');
+  card.classList.toggle('expanded');
+  if (!opening) return;
+  requestAnimationFrame(() => {
+    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+}
+
 /** Url patterns for a rule; tolerates the pre-v2 single-string shape. */
 function rulePatterns(rule) {
   if (Array.isArray(rule.urlFilters)) return rule.urlFilters;
@@ -311,7 +324,7 @@ function buildHeaderRuleCard(rule, expanded = false) {
   const headerEl = card.querySelector('.rule-card-header');
   headerEl.addEventListener('click', (e) => {
     if (e.target.closest('.rule-card-actions') || e.target.closest('.rule-name-input')) return;
-    card.classList.toggle('expanded');
+    toggleCard(card);
   });
 
   // Name
@@ -614,7 +627,7 @@ function buildMockRuleCard(rule, expanded = false) {
   const headerEl = card.querySelector('.rule-card-header');
   headerEl.addEventListener('click', (e) => {
     if (e.target.closest('.rule-card-actions') || e.target.closest('.rule-name-input')) return;
-    card.classList.toggle('expanded');
+    toggleCard(card);
   });
 
   const nameInput = card.querySelector('.rule-name-input');

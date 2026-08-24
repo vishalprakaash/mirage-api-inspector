@@ -55,13 +55,15 @@ function makeXHRClass() {
   };
 }
 
+const LOCALHOST = 'http://localhost:3000/dashboard';
+
 const CONTENT_MAIN = fs.readFileSync(path.join(__dirname, '..', 'content-main.js'), 'utf8');
 
 /**
  * Boots a fresh page with the content script installed.
  * Returns handles for driving requests and inspecting pass-through calls.
  */
-function bootPage(rules) {
+function bootPage(rules, baseURI = 'https://app.test/') {
   const win = new EventTarget();
   const passthrough = [];
 
@@ -71,7 +73,7 @@ function bootPage(rules) {
     return new Response('ORIGINAL', { status: 299 });
   };
 
-  const doc = { baseURI: 'https://app.test/' };
+  const doc = { baseURI };
   const XHR = makeXHRClass();
   const sandboxGlobal = { __MirageMatch: MATCHER };
 
@@ -141,6 +143,57 @@ const mock = (over = {}) => ({
     const miss = await win.fetch('https://api.test/orders');
     check('unmatched request passes through', miss.status, 299);
     check('pass-through recorded', passthrough.length, 1);
+  }
+
+  console.log('fetch — relative URLs (regression)');
+  {
+    // The real-world shape: an app served from localhost calling fetch('/api/...')
+    // with a `localhost*` filter. This silently passed through before the fix.
+    const { win, passthrough } = bootPage([mock({
+      urlFilters: ['localhost*'],
+      responseBody: '{"via":"localhost filter"}'
+    })], LOCALHOST);
+
+    const rel = await win.fetch('/api/users');
+    check('fetch("/api/users") is mocked', rel.status, 200);
+    check('mocked body returned', await rel.text(), '{"via":"localhost filter"}');
+    check('nothing passed through', passthrough.length, 0);
+
+    check('bare relative path mocked', (await win.fetch('api/users')).status, 200);
+    check('dot-relative path mocked', (await win.fetch('./api/users')).status, 200);
+    check('absolute same-origin mocked',
+      (await win.fetch('http://localhost:3000/api/users')).status, 200);
+  }
+
+  console.log('fetch — relative URL respects a non-matching filter');
+  {
+    // Resolution must not make everything match: page is app.test, filter is acme.
+    const { win } = bootPage([mock({ urlFilters: ['https://api.acme.dev/*'] })], LOCALHOST);
+    check('relative path on other origin passes through',
+      (await win.fetch('/api/users')).status, 299);
+  }
+
+  console.log('fetch — relative URL + payload matching');
+  {
+    const { win } = bootPage([mock({
+      method: 'POST',
+      urlFilters: ['localhost*'],
+      bodyMatch: { mode: 'includes', value: '"draft":true' },
+      responseBody: 'MOCKED'
+    })], LOCALHOST);
+
+    const hit = await win.fetch('/api/orders', { method: 'POST', body: '{"draft":true}' });
+    check('relative URL + payload both match', await hit.text(), 'MOCKED');
+
+    const miss = await win.fetch('/api/orders', { method: 'POST', body: '{"draft":false}' });
+    check('payload still gates the match', miss.status, 299);
+  }
+
+  console.log('XHR — relative URL with localhost filter (regression)');
+  {
+    const { XHR } = bootPage([mock({ urlFilters: ['localhost*'] })], LOCALHOST);
+    const { mocked } = await runXHR(XHR, 'GET', '/api/users');
+    check('XHR relative URL mocked under localhost*', mocked, true);
   }
 
   console.log('fetch — multiple URL filters');

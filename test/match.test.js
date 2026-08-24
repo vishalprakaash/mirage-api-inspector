@@ -70,6 +70,35 @@ check('rulePatterns reads array', M.rulePatterns({ urlFilters: ['a', '', 'b'] })
 check('rulePatterns migrates legacy string', M.rulePatterns({ urlFilter: 'localhost*' }), ['localhost*']);
 check('rulePatterns on bare rule', M.rulePatterns({}), []);
 
+// ─── Relative URL resolution ─────────────────────────────────────────────────
+// Regression: fetch('/api/users') from a localhost page must still match a
+// `localhost*` filter. Matching the raw relative string never did.
+
+group('Relative URL resolution');
+
+const BASE = 'http://localhost:3000/dashboard';
+
+check('absolute path resolved', M.resolveUrl('/api/users', BASE), 'http://localhost:3000/api/users');
+check('relative path resolved', M.resolveUrl('api/users', BASE), 'http://localhost:3000/api/users');
+check('dot-relative resolved', M.resolveUrl('./api', BASE), 'http://localhost:3000/api');
+check('protocol-relative resolved', M.resolveUrl('//cdn.dev/x', BASE), 'http://cdn.dev/x');
+check('absolute URL untouched',
+  M.resolveUrl('https://api.acme.dev/v1', BASE), 'https://api.acme.dev/v1');
+check('query preserved', M.resolveUrl('/api?page=2', BASE), 'http://localhost:3000/api?page=2');
+check('empty input is safe', typeof M.resolveUrl('', BASE), 'string');
+check('null input is safe', typeof M.resolveUrl(null, BASE), 'string');
+check('no base does not throw', typeof M.resolveUrl('/api/users', undefined), 'string');
+
+// The actual bug, end to end.
+check('relative URL now matches localhost* filter',
+  M.matchesPattern(M.resolveUrl('/api/users', BASE), 'localhost*'), true);
+check('raw relative URL still would not (why it failed)',
+  M.matchesPattern('/api/users', 'localhost*'), false);
+check('relative URL matches explicit host filter',
+  M.matchesPattern(M.resolveUrl('/api/users', BASE), 'http://localhost:3000/*'), true);
+check('relative URL on other host does not match',
+  M.matchesPattern(M.resolveUrl('/api/users', 'https://prod.acme.com/'), 'localhost*'), false);
+
 // ─── Payload: exact ──────────────────────────────────────────────────────────
 
 group('Payload — exact');
