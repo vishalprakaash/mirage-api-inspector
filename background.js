@@ -10,6 +10,7 @@
 
 import { getState, setState, makeProfile, migrate } from './lib/storage.js';
 import { buildDeclarativeRules } from './lib/dnr-rules.js';
+import { recordHit, getHits, resetHits, pruneHits } from './lib/hits.js';
 
 // ─── Initialization ──────────────────────────────────────────────────────────
 
@@ -37,7 +38,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function handleMessage(msg, sender) {
   switch (msg.type) {
     case 'GET_STATE':
-      return { ok: true, state: await getState() };
+      return { ok: true, state: await getState(), hits: await getHits() };
+
+    case 'MOCK_HIT':
+      await recordHit(msg.ruleId);
+      return { ok: true };
+
+    case 'GET_HITS':
+      return { ok: true, hits: await getHits() };
+
+    case 'RESET_HITS':
+      await resetHits(msg.ruleIds || null);
+      return { ok: true, hits: await getHits() };
 
     case 'SET_GLOBAL_ENABLED':
       await setState((s) => { s.globalEnabled = msg.enabled; });
@@ -81,6 +93,7 @@ async function handleMessage(msg, sender) {
       });
       await syncAllRules();
       await pushMockRulesToTabs();
+      await pruneStaleHits();
       return { ok: true };
 
     // Header rules
@@ -96,6 +109,7 @@ async function handleMessage(msg, sender) {
     case 'DELETE_HEADER_RULE':
       await setState((s) => { s.headerRules = s.headerRules.filter((r) => r.id !== msg.ruleId); });
       await syncAllRules();
+      await pruneStaleHits();
       return { ok: true };
 
     // Mock rules
@@ -111,6 +125,7 @@ async function handleMessage(msg, sender) {
     case 'DELETE_MOCK_RULE':
       await setState((s) => { s.mockRules = s.mockRules.filter((r) => r.id !== msg.ruleId); });
       await pushMockRulesToTabs();
+      await pruneStaleHits();
       return { ok: true };
 
     case 'GET_MOCK_RULES':
@@ -130,6 +145,9 @@ async function handleMessage(msg, sender) {
 
 // ─── declarativeNetRequest sync ───────────────────────────────────────────────
 
+/** Chrome dynamic rule id -> Mirage header rule id, for hit attribution. */
+let _dnrIdToRuleId = {};
+
 async function syncAllRules() {
   const state = await getState();
 
@@ -138,6 +156,7 @@ async function syncAllRules() {
   const removeRuleIds = existingRules.map((r) => r.id);
 
   if (!state.globalEnabled) {
+    _dnrIdToRuleId = {};
     if (removeRuleIds.length) {
       await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: [] });
     }
@@ -148,13 +167,15 @@ async function syncAllRules() {
     (p) => p.id === state.activeProfileId && p.enabled
   );
   if (!activeProfile) {
+    _dnrIdToRuleId = {};
     if (removeRuleIds.length) {
       await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: [] });
     }
     return;
   }
 
-  const addRules = buildDeclarativeRules(state.headerRules, activeProfile.id);
+  const { rules: addRules, idMap } = buildDeclarativeRules(state.headerRules, activeProfile.id);
+  _dnrIdToRuleId = idMap;
 
   try {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
@@ -172,6 +193,54 @@ async function syncAllRules() {
     }
   }
 }
+
+// ─── Hit counter maintenance ──────────────────────────────────────────────────
+
+/** Drops counters belonging to rules that no longer exist. */
+async function pruneStaleHits() {
+  const state = await getState();
+  const live = new Set([
+    ...state.headerRules.map((r) => r.id),
+    ...state.mockRules.map((r) => r.id)
+  ]);
+  await pruneHits(live);
+}
+
+// ─── Header rule hit tracking ─────────────────────────────────────────────────
+
+/**
+ * Counts header-rule matches.
+ *
+ * onRuleMatchedDebug is only available to unpacked extensions and needs the
+ * declarativeNetRequestFeedback permission, so this is feature-detected: if it
+ * is missing, header hit counts simply stay at zero and everything else works.
+ */
+function initHeaderHitTracking() {
+  const feedback = chrome.declarativeNetRequest?.onRuleMatchedDebug;
+  if (!feedback) {
+    console.info('[Mirage BG] onRuleMatchedDebug unavailable — header hit counts disabled.');
+    return;
+  }
+
+  // A single Mirage rule becomes several Chrome rules (one per url pattern, and
+  // one each for request/response headers), all of which can match the same
+  // request. Without deduping, one request would count as several hits.
+  const seen = new Set();
+  setInterval(() => seen.clear(), 5000);
+
+  feedback.addListener((info) => {
+    const ruleId = _dnrIdToRuleId[info?.rule?.ruleId];
+    if (!ruleId) return;
+
+    const key = `${info.request?.requestId}:${ruleId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    recordHit(ruleId);
+  });
+}
+
+initHeaderHitTracking();
 
 // ─── Mock rule broadcasting ───────────────────────────────────────────────────
 

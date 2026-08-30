@@ -251,6 +251,52 @@ input[type="checkbox"]:checked + .toggle-track.sm .toggle-thumb {
 
 .tab-count:not(:empty) { display: inline-block; }
 
+/* ─── Hit counters ───────────────────────────────────────────────────────── */
+
+.tab-hits {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--success-bg);
+  color: var(--success);
+  min-width: 18px;
+  text-align: center;
+  display: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.tab-hits:not(:empty) { display: inline-block; }
+
+.tab-reset-hits {
+  display: none;
+  margin-left: auto;
+  align-self: center;
+}
+
+/* Per-rule badge. Hidden until the rule actually fires, so quiet rules stay
+   visually calm and a firing one draws the eye. */
+.rule-hits {
+  display: none;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  animation: hitPulse 400ms ease;
+}
+
+.rule-hits.on { display: inline-block; }
+
+@keyframes hitPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
 /* ═══════════════════════════════ CONTENT / PANES ════════════════════════════ */
 
 /* min-height:0 on every flex child in this column is load-bearing. A flex item

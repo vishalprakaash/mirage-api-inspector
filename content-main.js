@@ -95,6 +95,18 @@
   }
 
   /**
+   * Tells the isolated world a mock fired, so it can be counted.
+   * This world has no chrome.* access, so the report has to go via postMessage.
+   */
+  function reportHit(rule) {
+    try {
+      window.postMessage({ __mirage__: true, type: 'MOCK_HIT', ruleId: rule.id }, '*');
+    } catch {
+      /* reporting must never break the request */
+    }
+  }
+
+  /**
    * Picks the rule to apply. Reads the request body only when some candidate
    * actually matches on payload, so ordinary traffic is untouched.
    */
@@ -134,6 +146,7 @@
 
     await sleep(rule.delay || 0);
     logMock('fetch', method, url, rule);
+    reportHit(rule);
     return buildResponse(rule, url);
   };
 
@@ -212,6 +225,7 @@
       });
 
       logMock('xhr', xhr.__mirageMethod, xhr.__mirageUrl, rule);
+      reportHit(rule);
 
       const progressInit = { lengthComputable: false, loaded: responseBody.length, total: 0 };
 

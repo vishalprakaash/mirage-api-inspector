@@ -66,6 +66,10 @@ const CONTENT_MAIN = fs.readFileSync(path.join(__dirname, '..', 'content-main.js
 function bootPage(rules, baseURI = 'https://app.test/') {
   const win = new EventTarget();
   const passthrough = [];
+  const posted = [];
+
+  // The content script reports hits by postMessage; capture them.
+  win.postMessage = (data) => posted.push(data);
 
   // Stand-in for the page's native fetch, so pass-through is observable.
   win.fetch = async (resource, init) => {
@@ -90,7 +94,9 @@ function bootPage(rules, baseURI = 'https://app.test/') {
   ev.data = { __mirage__: true, type: 'MOCK_RULES', rules };
   win.dispatchEvent(ev);
 
-  return { win, XHR, passthrough, sandboxGlobal };
+  const hitReports = () => posted.filter((m) => m && m.type === 'MOCK_HIT');
+
+  return { win, XHR, passthrough, sandboxGlobal, posted, hitReports };
 }
 
 /** Drives one XHR and resolves once it settles (or times out as pass-through). */
@@ -194,6 +200,38 @@ const mock = (over = {}) => ({
     const { XHR } = bootPage([mock({ urlFilters: ['localhost*'] })], LOCALHOST);
     const { mocked } = await runXHR(XHR, 'GET', '/api/users');
     check('XHR relative URL mocked under localhost*', mocked, true);
+  }
+
+  console.log('Hit reporting');
+  {
+    const { win, XHR, hitReports } = bootPage([
+      mock({ id: 'mock-a', urlFilters: ['https://api.test/a'] }),
+      mock({ id: 'mock-b', urlFilters: ['https://api.test/b'] })
+    ]);
+
+    check('no hits before any request', hitReports().length, 0);
+
+    await win.fetch('https://api.test/a');
+    check('fetch hit reported', hitReports().length, 1);
+    check('reports the rule that fired', hitReports()[0].ruleId, 'mock-a');
+    check('report is tagged for Mirage', hitReports()[0].__mirage__, true);
+
+    await win.fetch('https://api.test/a');
+    await win.fetch('https://api.test/b');
+    check('one report per mocked request', hitReports().length, 3);
+    check('attributed to the right rules',
+      hitReports().map((h) => h.ruleId), ['mock-a', 'mock-a', 'mock-b']);
+
+    // Pass-throughs must not be counted.
+    await win.fetch('https://api.test/unmatched');
+    check('pass-through reports no hit', hitReports().length, 3);
+
+    await runXHR(XHR, 'GET', 'https://api.test/b');
+    check('xhr hit reported', hitReports().length, 4);
+    check('xhr attributed correctly', hitReports()[3].ruleId, 'mock-b');
+
+    await runXHR(XHR, 'GET', 'https://api.test/nope');
+    check('xhr pass-through reports no hit', hitReports().length, 4);
   }
 
   console.log('fetch — multiple URL filters');

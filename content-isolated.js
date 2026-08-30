@@ -16,6 +16,23 @@
   // both directions of that race.
   window.addEventListener('__mirage_request_rules__', () => broadcastRules());
 
+  // The MAIN world cannot reach chrome.*, so mock hits are relayed from there
+  // by postMessage and forwarded to the background for counting.
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || data.__mirage__ !== true || data.type !== 'MOCK_HIT') return;
+    try {
+      chrome.runtime.sendMessage({ type: 'MOCK_HIT', ruleId: data.ruleId }, () => {
+        // Swallow "no receiver" while the worker is waking; a lost count is
+        // not worth retrying and must never surface as an unhandled error.
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      /* extension context invalidated */
+    }
+  });
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.type === 'UPDATE_MOCK_RULES') {
       currentRules = msg.rules || [];

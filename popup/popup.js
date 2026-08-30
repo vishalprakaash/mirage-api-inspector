@@ -81,6 +81,12 @@ function rulePatterns(rule) {
   return rule.urlFilter ? [rule.urlFilter] : [];
 }
 
+/** Hit-count badge for a rule card; empty (but present) until the rule fires. */
+function hitBadgeHtml(rule) {
+  const n = hitsFor(rule);
+  return `<span class="rule-hits${n > 0 ? ' on' : ''}" data-hits-for="${escHtml(rule.id)}" title="${n} hit${n !== 1 ? 's' : ''}">${n > 0 ? formatHits(n) : ''}</span>`;
+}
+
 /** Chip text summarising a rule's url filters for the collapsed card header. */
 function urlChipHtml(rule) {
   const pats = rulePatterns(rule).filter((p) => p && p.trim());
@@ -92,10 +98,29 @@ function urlChipHtml(rule) {
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let state = null; // full state from background
+let hits = {};    // { ruleId: count }
 
 async function loadState() {
   const res = await msg('GET_STATE');
-  if (res.ok) state = res.state;
+  if (res.ok) {
+    state = res.state;
+    hits = res.hits || {};
+  }
+}
+
+function hitsFor(rule) {
+  return hits[rule.id] || 0;
+}
+
+function totalHits(rules) {
+  return rules.reduce((sum, r) => sum + hitsFor(r), 0);
+}
+
+/** Compact display for large counts, so the badge never blows out the layout. */
+function formatHits(n) {
+  if (n < 1000) return String(n);
+  if (n < 10000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return Math.round(n / 1000) + 'k';
 }
 
 function activeProfile() {
@@ -284,6 +309,7 @@ function buildHeaderRuleCard(rule, expanded = false) {
         ${headerCount > 0 ? `<span class="badge badge-req">${headerCount} header${headerCount !== 1 ? 's' : ''}</span>` : ''}
       </div>
       <div class="rule-card-actions">
+        ${hitBadgeHtml(rule)}
         <label style="display:flex;align-items:center;cursor:pointer" title="Enable rule">
           <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="rule-enable-cb" />
           <span class="toggle-track sm"><span class="toggle-thumb"></span></span>
@@ -504,6 +530,7 @@ function buildMockRuleCard(rule, expanded = false) {
         ${urlChipHtml(rule)}
       </div>
       <div class="rule-card-actions">
+        ${hitBadgeHtml(rule)}
         <label style="display:flex;align-items:center;cursor:pointer" title="Enable">
           <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="rule-enable-cb" />
           <span class="toggle-track sm"><span class="toggle-thumb"></span></span>
@@ -784,10 +811,54 @@ function renderCounts() {
   const hCount = profileHeaderRules().filter((r) => r.enabled).length;
   const mCount = profileMockRules().filter((r) => r.enabled).length;
 
-  const hEl = document.getElementById('header-count');
-  const mEl = document.getElementById('mock-count');
-  hEl.textContent = hCount > 0 ? String(hCount) : '';
-  mEl.textContent = mCount > 0 ? String(mCount) : '';
+  document.getElementById('header-count').textContent = hCount > 0 ? String(hCount) : '';
+  document.getElementById('mock-count').textContent = mCount > 0 ? String(mCount) : '';
+
+  renderHitTotals();
+}
+
+/** Per-tab hit totals, and whether the reset control is worth showing. */
+function renderHitTotals() {
+  const hTotal = totalHits(profileHeaderRules());
+  const mTotal = totalHits(profileMockRules());
+
+  const hEl = document.getElementById('header-hits');
+  const mEl = document.getElementById('mock-hits');
+
+  hEl.textContent = hTotal > 0 ? formatHits(hTotal) : '';
+  hEl.title = `${hTotal} header rule hit${hTotal !== 1 ? 's' : ''}`;
+  mEl.textContent = mTotal > 0 ? formatHits(mTotal) : '';
+  mEl.title = `${mTotal} mock hit${mTotal !== 1 ? 's' : ''}`;
+
+  document.getElementById('btn-reset-hits').style.display =
+    hTotal + mTotal > 0 ? 'inline-flex' : 'none';
+}
+
+/**
+ * Updates hit badges in place.
+ *
+ * Deliberately surgical rather than a re-render: counts change while the user
+ * is typing in a card, and rebuilding the list would drop focus and collapse
+ * open cards.
+ */
+function updateHitBadges() {
+  for (const el of document.querySelectorAll('[data-hits-for]')) {
+    const n = hits[el.dataset.hitsFor] || 0;
+    const prev = Number(el.dataset.prevHits || 0);
+
+    el.textContent = n > 0 ? formatHits(n) : '';
+    el.classList.toggle('on', n > 0);
+    el.title = `${n} hit${n !== 1 ? 's' : ''}`;
+
+    // Restart the pulse so a rule firing while the popup is open is noticeable.
+    if (n > prev) {
+      el.style.animation = 'none';
+      void el.offsetWidth; // force reflow to restart the animation
+      el.style.animation = '';
+    }
+    el.dataset.prevHits = String(n);
+  }
+  renderHitTotals();
 }
 
 // ─── Profile actions ──────────────────────────────────────────────────────────
@@ -972,6 +1043,33 @@ function initEvents() {
   // Add rules
   document.getElementById('btn-add-header-rule').addEventListener('click', addHeaderRule);
   document.getElementById('btn-add-mock-rule').addEventListener('click', addMockRule);
+
+  // Reset hit counters
+  document.getElementById('btn-reset-hits').addEventListener('click', async () => {
+    const confirmed = await showModal({
+      title: 'Reset Hit Counters',
+      body: '<p style="color:var(--text-secondary);font-size:13px">Set every rule\'s hit count back to zero? Your rules are not affected.</p>',
+      confirmText: 'Reset',
+      danger: true
+    });
+    if (!confirmed) return;
+    const res = await msg('RESET_HITS');
+    if (res.ok) {
+      hits = res.hits || {};
+      updateHitBadges();
+      showToast('Hit counters reset', 'success');
+    }
+  });
+
+  // Counts change as requests fire; the background writes them to storage, so
+  // watching that key keeps an open popup live without polling.
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.__mirage_hits__) return;
+      hits = changes.__mirage_hits__.newValue || {};
+      updateHitBadges();
+    });
+  }
 
   // Export/Import
   document.getElementById('btn-export').addEventListener('click', exportData);
