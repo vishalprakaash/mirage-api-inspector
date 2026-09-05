@@ -309,7 +309,6 @@ function buildHeaderRuleCard(rule, expanded = false) {
         ${headerCount > 0 ? `<span class="badge badge-req">${headerCount} header${headerCount !== 1 ? 's' : ''}</span>` : ''}
       </div>
       <div class="rule-card-actions">
-        ${hitBadgeHtml(rule)}
         <label style="display:flex;align-items:center;cursor:pointer" title="Enable rule">
           <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="rule-enable-cb" />
           <span class="toggle-track sm"><span class="toggle-thumb"></span></span>
@@ -817,21 +816,20 @@ function renderCounts() {
   renderHitTotals();
 }
 
-/** Per-tab hit totals, and whether the reset control is worth showing. */
+/**
+ * Mock tab total, and whether the reset control is worth showing.
+ * Header rules are not counted — declarativeNetRequest applies them at the
+ * network layer, where the extension never observes individual matches.
+ */
 function renderHitTotals() {
-  const hTotal = totalHits(profileHeaderRules());
   const mTotal = totalHits(profileMockRules());
-
-  const hEl = document.getElementById('header-hits');
   const mEl = document.getElementById('mock-hits');
 
-  hEl.textContent = hTotal > 0 ? formatHits(hTotal) : '';
-  hEl.title = `${hTotal} header rule hit${hTotal !== 1 ? 's' : ''}`;
   mEl.textContent = mTotal > 0 ? formatHits(mTotal) : '';
   mEl.title = `${mTotal} mock hit${mTotal !== 1 ? 's' : ''}`;
 
   document.getElementById('btn-reset-hits').style.display =
-    hTotal + mTotal > 0 ? 'inline-flex' : 'none';
+    mTotal > 0 ? 'inline-flex' : 'none';
 }
 
 /**

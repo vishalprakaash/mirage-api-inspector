@@ -4,14 +4,11 @@
  */
 
 import {
-  buildDeclarativeRules as buildRaw,
+  buildDeclarativeRules,
   buildCondition,
   patternToDeclarativeFilter,
   rulePatterns
 } from '../lib/dnr-rules.js';
-
-/** Most assertions only care about the emitted rules. */
-const buildDeclarativeRules = (rules, profileId) => buildRaw(rules, profileId).rules;
 
 let pass = 0;
 let fail = 0;
@@ -172,35 +169,6 @@ check('never emits regexFilter',
 // isUrlFilterCaseSensitive defaults to false; emitting it adds nothing.
 check('no redundant case-sensitivity key',
   'isUrlFilterCaseSensitive' in patternToDeclarativeFilter('https://a.dev/*'), false);
-
-console.log('Hit attribution id map');
-
-{
-  // One Mirage rule fans out to several Chrome rules; every one must map back.
-  const built = buildRaw(
-    [
-      hdr({ id: 'h1', urlFilters: ['localhost*', 'https://a.dev/*'], headers: [reqHeader, resHeader] }),
-      hdr({ id: 'h2', urlFilters: ['https://b.dev/*'], headers: [reqHeader] })
-    ],
-    PROFILE
-  );
-
-  check('every emitted rule is in the map',
-    built.rules.every((r) => built.idMap[r.id] !== undefined), true);
-  check('map size matches rule count',
-    Object.keys(built.idMap).length, built.rules.length);
-  check('h1 fans out to 4 chrome rules',
-    Object.values(built.idMap).filter((id) => id === 'h1').length, 4);
-  check('h2 fans out to 1 chrome rule',
-    Object.values(built.idMap).filter((id) => id === 'h2').length, 1);
-  check('map resolves to Mirage rule ids',
-    [...new Set(Object.values(built.idMap))].sort(), ['h1', 'h2']);
-
-  // Skipped rules must not leave phantom entries behind.
-  const skipped = buildRaw([hdr({ id: 'h9', enabled: false, headers: [reqHeader] })], PROFILE);
-  check('disabled rule contributes no mapping', Object.keys(skipped.idMap).length, 0);
-  check('empty build yields empty map', Object.keys(buildRaw([], PROFILE).idMap).length, 0);
-}
 
 console.log('Legacy shape');
 
