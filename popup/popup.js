@@ -112,6 +112,20 @@ function hitsFor(rule) {
   return hits[rule.id] || 0;
 }
 
+/**
+ * Applies counters returned by a background response.
+ *
+ * Handlers that reset counters send the fresh set back, so the UI updates from
+ * the reply itself. The storage-change listener is a secondary path for counts
+ * that tick up while the popup sits open; relying on it alone left a reset
+ * invisible whenever that event did not arrive.
+ */
+function applyHits(res) {
+  if (!res || !res.hits) return;
+  hits = res.hits;
+  updateHitBadges();
+}
+
 function totalHits(rules) {
   return rules.reduce((sum, r) => sum + hitsFor(r), 0);
 }
@@ -761,7 +775,8 @@ async function saveMockRule(ruleRef, changes) {
   if (idx >= 0) state.mockRules[idx] = merged;
   else state.mockRules.push(merged);
 
-  await msg('UPSERT_MOCK_RULE', { rule: merged });
+  const res = await msg('UPSERT_MOCK_RULE', { rule: merged });
+  applyHits(res);
   renderCounts();
 }
 
@@ -964,7 +979,11 @@ function initEvents() {
   // Global toggle
   document.getElementById('global-enabled').addEventListener('change', async (e) => {
     const res = await msg('SET_GLOBAL_ENABLED', { enabled: e.target.checked });
-    if (res.ok && state) { state.globalEnabled = e.target.checked; renderCounts(); }
+    if (res.ok && state) {
+      state.globalEnabled = e.target.checked;
+      applyHits(res);
+      renderCounts();
+    }
   });
 
   // Profile select
@@ -987,6 +1006,8 @@ function initEvents() {
     if (res.ok) {
       const p = activeProfile();
       if (p) p.enabled = e.target.checked;
+      applyHits(res);
+      renderCounts();
       const dot = document.getElementById('profile-dot');
       dot.style.opacity = e.target.checked ? '1' : '0.3';
     }

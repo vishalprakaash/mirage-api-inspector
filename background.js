@@ -59,7 +59,7 @@ async function handleMessage(msg, sender) {
       await syncAllRules();
       await pushMockRulesToTabs();
       updateBadge();
-      return { ok: true };
+      return { ok: true, hits: await getHits() };
 
     case 'SET_ACTIVE_PROFILE':
       await setState((s) => { s.activeProfileId = msg.profileId; });
@@ -88,7 +88,7 @@ async function handleMessage(msg, sender) {
       await syncAllRules();
       await pushMockRulesToTabs();
       updateBadge();
-      return { ok: true };
+      return { ok: true, hits: await getHits() };
     }
 
     case 'DELETE_PROFILE':
@@ -133,7 +133,7 @@ async function handleMessage(msg, sender) {
       });
       if (flipped) await resetHits([msg.rule.id]);
       await pushMockRulesToTabs();
-      return { ok: true };
+      return { ok: true, hits: await getHits() };
     }
 
     case 'DELETE_MOCK_RULE':
